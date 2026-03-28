@@ -2,10 +2,8 @@ import type { ReactNode } from "react";
 import { useMemo, useState, useEffect } from "react";
 import {
   decodeBase64,
-  decodeBase64ByLine,
   decodeUrl,
   encodeBase64,
-  encodeBase64ByLine,
   encodeUrl,
   hexToText,
   textToHex
