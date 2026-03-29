@@ -235,9 +235,16 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
   return (
     <CardFrame tool={tool}>
       <div style={{display: "flex", justifyContent: "center", marginBottom: "16px"}}>
-        <div className="output-panel" style={{padding: "10px 24px", textAlign: "center"}}>
-          <span style={{color: "var(--text-secondary)", fontSize: "12px"}}>当前时间戳 (s)</span>
-          <div style={{fontFamily: "var(--mono-font)", fontSize: "20px", fontWeight: "600", color: "var(--accent)"}}>{now}</div>
+        <div className="output-panel" style={{padding: "10px 24px", width: "100%", maxWidth: "420px"}}>
+          <div style={{width: "100%", maxWidth: "320px", margin: "0 auto"}}>
+          <span style={{color: "var(--text-secondary)", fontSize: "12px", display: "block", marginBottom: "6px"}}>当前时间戳 (s)</span>
+          <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px"}}>
+            <div style={{fontFamily: "var(--mono-font)", fontSize: "20px", fontWeight: "600", color: "var(--accent)"}}>{now}</div>
+            <button className="secondary-button" style={{padding: "4px 10px", fontSize: "12px", marginLeft: "auto"}} onClick={() => onCopy(String(now))}>
+              复制
+            </button>
+          </div>
+          </div>
         </div>
       </div>
       <div className="button-row" style={{gap: "8px"}}>
