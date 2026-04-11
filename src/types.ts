@@ -1,4 +1,4 @@
-export type ToolCategory = "encoding" | "generation" | "crypto" | "developer";
+export type ToolCategory = "encoding" | "generation" | "media" | "crypto" | "developer";
 
 export type ToolDefinition = {
   id: string;

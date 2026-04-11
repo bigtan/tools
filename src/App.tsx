@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { useMemo, useState, useEffect } from "react";
+import type { ChangeEvent, ReactNode } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   decodeBase64,
   decodeUrl,
@@ -26,6 +27,9 @@ const tools: ToolDefinition[] = [
   { id: "hex", name: "Hex / Text", summary: "文本与 Hex 的双向转换。", category: "encoding" },
   { id: "random", name: "随机字符串", summary: "可配置字符集、长度、数量生成。", category: "generation" },
   { id: "uuid", name: "UUID", summary: "批量生成 UUID v4。", category: "generation" },
+  { id: "qrcode", name: "二维码生成", summary: "生成可下载 SVG 二维码，支持纠错等级和边距。", category: "generation" },
+  { id: "image-compress", name: "图片压缩", summary: "本地压缩图片，默认 WebP，支持 JPEG/WebP/PNG 输出。", category: "media" },
+  { id: "image-convert", name: "图像类型转换", summary: "本地转换常见图像格式，支持 PNG/JPEG/WebP 输出。", category: "media" },
   { id: "aes", name: "AES 加解密", summary: "CBC/GCM 编解码及 Key/IV 生成。", category: "crypto" },
   { id: "asym-keys", name: "证书与密钥", summary: "生成 RSA/ECC 密钥对及 CSR 请求。", category: "crypto" },
   { id: "hash", name: "Hash 摘要", summary: "SHA-256 / 384 / 512 计算。", category: "crypto" },
@@ -38,12 +42,45 @@ const categories: Array<{ id: ToolCategory | "all"; label: string }> = [
   { id: "all", label: "全部" },
   { id: "encoding", label: "编码转换" },
   { id: "generation", label: "文本生成" },
+  { id: "media", label: "图像媒体" },
   { id: "crypto", label: "安全加密" },
   { id: "developer", label: "日常辅助" }
 ];
 
 type OutputState = { value: string; error: string; };
 const emptyOutput: OutputState = { value: "", error: "" };
+type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
+type QrErrorLevel = "L" | "M" | "Q" | "H";
+
+const imageFormatOptions: Array<{ value: ImageFormat; label: string; extension: string }> = [
+  { value: "image/webp", label: "WebP", extension: "webp" },
+  { value: "image/jpeg", label: "JPEG", extension: "jpg" },
+  { value: "image/png", label: "PNG", extension: "png" }
+];
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** index;
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function filenameBase(name: string) {
+  return name.replace(/\.[^/.]+$/, "") || "image";
+}
+
+async function canvasToImageBlob(canvas: HTMLCanvasElement, format: ImageFormat, quality?: number) {
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      nextBlob => nextBlob ? resolve(nextBlob) : reject(new Error("图片导出失败")),
+      format,
+      format === "image/png" ? undefined : quality
+    );
+  });
+  if (blob.type && blob.type !== format) throw new Error(`${format} 输出不受当前浏览器支持`);
+  return blob;
+}
 
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<ToolCategory | "all">("all");
@@ -113,6 +150,9 @@ function ToolPanel({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string)
     hex: <HexTool tool={tool} onCopy={onCopy} />,
     random: <RandomTool tool={tool} onCopy={onCopy} />,
     uuid: <UuidTool tool={tool} onCopy={onCopy} />,
+    qrcode: <QrCodeTool tool={tool} onCopy={onCopy} />,
+    "image-compress": <ImageCompressTool tool={tool} />,
+    "image-convert": <ImageConvertTool tool={tool} />,
     aes: <AesTool tool={tool} onCopy={onCopy} />,
     "asym-keys": <AsymKeysTool tool={tool} onCopy={onCopy} />,
     hash: <HashTool tool={tool} onCopy={onCopy} />,
@@ -143,6 +183,290 @@ function CardFrame({ tool, controls, output, onCopy, children }: {
         </div>
       )}
     </article>
+  );
+}
+
+function ImageCompressTool({ tool }: { tool: ToolDefinition }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [format, setFormat] = useState<ImageFormat>("image/webp");
+  const [quality, setQuality] = useState(0.8);
+  const [maxWidth, setMaxWidth] = useState(1920);
+  const [maxHeight, setMaxHeight] = useState(1080);
+  const [result, setResult] = useState<{ url: string; blob: Blob; width: number; height: number } | null>(null);
+  const [error, setError] = useState("");
+  const currentFormat = imageFormatOptions.find(option => option.value === format) ?? imageFormatOptions[0];
+
+  useEffect(() => () => {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+  }, [sourceUrl]);
+
+  useEffect(() => () => {
+    if (result?.url) URL.revokeObjectURL(result.url);
+  }, [result]);
+
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0] ?? null;
+    setError("");
+    setResult(null);
+    setFile(selected);
+    setSourceUrl(selected ? URL.createObjectURL(selected) : "");
+  };
+
+  const compress = async () => {
+    if (!file) {
+      setError("请先选择图片文件。");
+      return;
+    }
+
+    let bitmap: ImageBitmap | null = null;
+    try {
+      bitmap = await createImageBitmap(file);
+      const widthLimit = Number.isFinite(maxWidth) && maxWidth > 0 ? maxWidth : bitmap.width;
+      const heightLimit = Number.isFinite(maxHeight) && maxHeight > 0 ? maxHeight : bitmap.height;
+      const ratio = Math.min(1, widthLimit / bitmap.width, heightLimit / bitmap.height);
+      const width = Math.max(1, Math.round(bitmap.width * ratio));
+      const height = Math.max(1, Math.round(bitmap.height * ratio));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 初始化失败");
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      if (format === "image/jpeg") {
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+      }
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await canvasToImageBlob(canvas, format, format === "image/png" ? undefined : quality);
+      setResult({ url: URL.createObjectURL(blob), blob, width, height });
+      setError("");
+    } catch (cause) {
+      console.error(cause);
+      setError(cause instanceof Error ? cause.message : "图片处理失败，请确认文件格式可被当前浏览器解码。");
+    } finally {
+      bitmap?.close();
+    }
+  };
+
+  const download = () => {
+    if (!result || !file) return;
+    const anchor = document.createElement("a");
+    anchor.href = result.url;
+    anchor.download = `${filenameBase(file.name)}-compressed.${currentFormat.extension}`;
+    anchor.click();
+  };
+
+  const reduction = file && result ? Math.max(0, 1 - result.blob.size / file.size) * 100 : 0;
+
+  return (
+    <CardFrame tool={tool} controls={
+      <select value={format} onChange={event => setFormat(event.target.value as ImageFormat)}>
+        {imageFormatOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    }>
+      <label className="file-picker">
+        <span>选择图片</span>
+        <input type="file" accept="image/*" onChange={onFileChange} />
+      </label>
+      <div className="form-grid">
+        <label><span>最大宽度</span><input type="number" min="1" value={maxWidth} onChange={event => setMaxWidth(Number(event.target.value))} /></label>
+        <label><span>最大高度</span><input type="number" min="1" value={maxHeight} onChange={event => setMaxHeight(Number(event.target.value))} /></label>
+      </div>
+      <label>
+        <span>质量 {Math.round(quality * 100)}%</span>
+        <input type="range" min="0.1" max="1" step="0.05" value={quality} disabled={format === "image/png"} onChange={event => setQuality(Number(event.target.value))} />
+      </label>
+      <div className="button-row"><button onClick={compress} disabled={!file}>压缩图片</button>{result && <button className="secondary-button" onClick={download}>下载</button>}</div>
+      {error && <p className="form-error">{error}</p>}
+      {(sourceUrl || result) && (
+        <div className="preview-grid">
+          {sourceUrl && file && <ImagePreview title="原图" src={sourceUrl} meta={`${formatBytes(file.size)} · ${file.type || "unknown"}`} />}
+          {result && <ImagePreview title="压缩后" src={result.url} meta={`${formatBytes(result.blob.size)} · ${result.width}x${result.height} · 节省 ${reduction.toFixed(1)}%`} />}
+        </div>
+      )}
+    </CardFrame>
+  );
+}
+
+function ImagePreview({ title, src, meta }: { title: string; src: string; meta: string }) {
+  return (
+    <div className="media-preview">
+      <div className="media-preview-head"><strong>{title}</strong><span>{meta}</span></div>
+      <img src={src} alt={title} />
+    </div>
+  );
+}
+
+function ImageConvertTool({ tool }: { tool: ToolDefinition }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [format, setFormat] = useState<ImageFormat>("image/webp");
+  const [quality, setQuality] = useState(1);
+  const [result, setResult] = useState<{ url: string; blob: Blob; width: number; height: number } | null>(null);
+  const [error, setError] = useState("");
+  const currentFormat = imageFormatOptions.find(option => option.value === format) ?? imageFormatOptions[0];
+  const usesQuality = format !== "image/png";
+
+  useEffect(() => () => {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+  }, [sourceUrl]);
+
+  useEffect(() => () => {
+    if (result?.url) URL.revokeObjectURL(result.url);
+  }, [result]);
+
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0] ?? null;
+    setError("");
+    setResult(null);
+    setFile(selected);
+    setSourceUrl(selected ? URL.createObjectURL(selected) : "");
+  };
+
+  const convert = async () => {
+    if (!file) {
+      setError("请先选择图片文件。");
+      return;
+    }
+
+    let bitmap: ImageBitmap | null = null;
+    try {
+      bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 初始化失败");
+      if (format === "image/jpeg") {
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      context.drawImage(bitmap, 0, 0);
+      const blob = await canvasToImageBlob(canvas, format, usesQuality ? quality : undefined);
+      setResult({ url: URL.createObjectURL(blob), blob, width: bitmap.width, height: bitmap.height });
+      setError("");
+    } catch (cause) {
+      console.error(cause);
+      setError(cause instanceof Error ? cause.message : "图像转换失败，请确认文件格式可被当前浏览器解码。");
+    } finally {
+      bitmap?.close();
+    }
+  };
+
+  const download = () => {
+    if (!result || !file) return;
+    const anchor = document.createElement("a");
+    anchor.href = result.url;
+    anchor.download = `${filenameBase(file.name)}.${currentFormat.extension}`;
+    anchor.click();
+  };
+
+  return (
+    <CardFrame tool={tool} controls={
+      <select value={format} onChange={event => setFormat(event.target.value as ImageFormat)}>
+        {imageFormatOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    }>
+      <label className="file-picker">
+        <span>选择图片</span>
+        <input type="file" accept="image/*" onChange={onFileChange} />
+      </label>
+      <label>
+        <span>质量 {usesQuality ? `${Math.round(quality * 100)}%` : "PNG 无损"}</span>
+        <input type="range" min="0.1" max="1" step="0.05" value={quality} disabled={!usesQuality} onChange={event => setQuality(Number(event.target.value))} />
+      </label>
+      <p className="form-note">动画图片会按浏览器解码结果转换为静态图。</p>
+      <div className="button-row"><button onClick={convert} disabled={!file}>转换类型</button>{result && <button className="secondary-button" onClick={download}>下载</button>}</div>
+      {error && <p className="form-error">{error}</p>}
+      {(sourceUrl || result) && (
+        <div className="preview-grid">
+          {sourceUrl && file && <ImagePreview title="原图" src={sourceUrl} meta={`${formatBytes(file.size)} · ${file.type || "unknown"}`} />}
+          {result && <ImagePreview title={currentFormat.label} src={result.url} meta={`${formatBytes(result.blob.size)} · ${result.width}x${result.height}`} />}
+        </div>
+      )}
+    </CardFrame>
+  );
+}
+
+function QrCodeTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
+  const [value, setValue] = useState("https://example.com");
+  const [size, setSize] = useState(220);
+  const [level, setLevel] = useState<QrErrorLevel>("M");
+  const [margin, setMargin] = useState(4);
+  const [fgColor, setFgColor] = useState("#000000");
+  const [bgColor, setBgColor] = useState("#ffffff");
+  const [format, setFormat] = useState<ImageFormat>("image/webp");
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const currentFormat = imageFormatOptions.find(option => option.value === format) ?? imageFormatOptions[0];
+
+  const getSvgText = () => {
+    if (!svgRef.current) return "";
+    return new XMLSerializer().serializeToString(svgRef.current);
+  };
+
+  const copySvg = () => {
+    const svgText = getSvgText();
+    if (svgText) onCopy(svgText);
+  };
+
+  const downloadQrCode = async () => {
+    const svgText = getSvgText();
+    if (!svgText) return;
+    const svgUrl = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
+    let blob: Blob | null = null;
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = svgUrl;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 初始化失败");
+      if (format === "image/jpeg") {
+        context.fillStyle = bgColor;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      context.drawImage(image, 0, 0, size, size);
+      blob = await canvasToImageBlob(canvas, format, 1);
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `qrcode.${currentFormat.extension}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <CardFrame tool={tool} controls={
+      <>
+        <select value={level} onChange={event => setLevel(event.target.value as QrErrorLevel)}>
+          <option value="L">纠错 L</option><option value="M">纠错 M</option><option value="Q">纠错 Q</option><option value="H">纠错 H</option>
+        </select>
+        <select value={format} onChange={event => setFormat(event.target.value as ImageFormat)}>
+          {imageFormatOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </>
+    }>
+      <textarea value={value} onChange={event => setValue(event.target.value)} placeholder="输入文本、链接或其他内容..." />
+      <div className="form-grid">
+        <label><span>尺寸</span><input type="number" min="96" max="1024" value={size} onChange={event => setSize(Number(event.target.value))} /></label>
+        <label><span>边距模块</span><input type="number" min="0" max="8" value={margin} onChange={event => setMargin(Number(event.target.value))} /></label>
+        <label><span>前景色</span><input type="color" value={fgColor} onChange={event => setFgColor(event.target.value)} /></label>
+        <label><span>背景色</span><input type="color" value={bgColor} onChange={event => setBgColor(event.target.value)} /></label>
+      </div>
+      <div className="qr-preview">
+        <QRCodeSVG ref={svgRef} value={value || " "} size={size} level={level} marginSize={margin} fgColor={fgColor} bgColor={bgColor} title="QR Code" />
+      </div>
+      <div className="button-row"><button onClick={downloadQrCode}>下载 {currentFormat.label}</button><button className="secondary-button" onClick={copySvg}>复制 SVG</button></div>
+    </CardFrame>
   );
 }
 
