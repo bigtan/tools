@@ -16,6 +16,8 @@
 
 ## 本地开发
 
+本项目仅使用 `pnpm` 进行依赖管理。
+
 ```bash
 pnpm install
 pnpm dev
