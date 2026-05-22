@@ -1,3 +1,4 @@
+import { Name, Pkcs10CertificateRequestGenerator } from "@peculiar/x509";
 import { bytesToHex, hexToBytes } from "./codec";
 
 const encoder = new TextEncoder();
@@ -147,8 +148,80 @@ export async function generateEccKeyPair(namedCurve: "P-256" | "P-384" | "P-521"
   };
 }
 
-export async function generateCsr(_keyPair: { privateKey: string; publicKey: string }, dn: any, type: "RSA" | "ECC") {
-  const info = `CN=${dn.commonName}, O=${dn.organization}, C=${dn.country}`;
-  const mockB64 = btoa(encoder.encode(`CSR_FOR_${type}_${info}_${Date.now()}`).toString());
-  return formatAsPem(mockB64, "CERTIFICATE REQUEST");
+async function importEccPublicKey(pubBytes: Uint8Array): Promise<CryptoKey> {
+  const curves: Array<"P-256" | "P-384" | "P-521"> = ["P-256", "P-384", "P-521"];
+  for (const curve of curves) {
+    try {
+      return await crypto.subtle.importKey(
+        "spki",
+        pubBytes as any,
+        { name: "ECDSA", namedCurve: curve },
+        true,
+        ["verify"]
+      );
+    } catch (e) {
+      // try next
+    }
+  }
+  throw new Error("无法识别的 ECC 公钥格式");
+}
+
+export async function generateCsr(
+  keyPair: { privateKey: string; publicKey: string },
+  dn: { commonName?: string; organization?: string; country?: string },
+  type: "RSA" | "ECC"
+) {
+  const cleanPriv = keyPair.privateKey
+    .replace(/-----BEGIN[A-Z ]*-----/g, "")
+    .replace(/-----END[A-Z ]*-----/g, "")
+    .replace(/\s/g, "");
+  const cleanPub = keyPair.publicKey
+    .replace(/-----BEGIN[A-Z ]*-----/g, "")
+    .replace(/-----END[A-Z ]*-----/g, "")
+    .replace(/\s/g, "");
+
+  const privBytes = base64ToBytes(cleanPriv);
+  const pubBytes = base64ToBytes(cleanPub);
+
+  let privateKey: CryptoKey;
+  let publicKey: CryptoKey;
+  let alg: any;
+
+  if (type === "RSA") {
+    alg = {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256"
+    };
+    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as any, alg, true, ["sign"]);
+    publicKey = await crypto.subtle.importKey("spki", pubBytes as any, alg, true, ["verify"]);
+  } else {
+    publicKey = await importEccPublicKey(pubBytes);
+    const curve = (publicKey.algorithm as EcKeyAlgorithm).namedCurve;
+    alg = {
+      name: "ECDSA",
+      namedCurve: curve,
+      hash: "SHA-256"
+    };
+    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as any, alg, true, ["sign"]);
+  }
+
+  const nameParts: Array<Record<string, string[]>> = [];
+  const commonName = dn.commonName?.trim();
+  const organization = dn.organization?.trim();
+  const country = dn.country?.trim();
+  if (commonName) nameParts.push({ CN: [commonName] });
+  if (organization) nameParts.push({ O: [organization] });
+  if (country) nameParts.push({ C: [country] });
+  const subjectName = new Name(nameParts.length ? nameParts : [{ CN: ["Developer Tools CSR"] }]);
+
+  const csr = await Pkcs10CertificateRequestGenerator.create({
+    name: subjectName,
+    keys: {
+      privateKey,
+      publicKey
+    },
+    signingAlgorithm: alg
+  });
+
+  return csr.toString();
 }

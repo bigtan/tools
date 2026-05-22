@@ -47,6 +47,15 @@ export function decodeBase64(value: string) {
   return decoder.decode(binaryToBytes(atob(value)));
 }
 
+export function decodeBase64Url(value: string) {
+  let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4;
+  if (pad) {
+    base64 += "=".repeat(4 - pad);
+  }
+  return decodeBase64(base64);
+}
+
 export function encodeBase64ByLine(value: string, preserveEmptyLines: boolean) {
   return transformByLine(value, preserveEmptyLines, encodeBase64);
 }

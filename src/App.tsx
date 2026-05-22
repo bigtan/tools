@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   decodeBase64,
+  decodeBase64Url,
   decodeUrl,
   encodeBase64,
   encodeUrl,
@@ -82,8 +83,58 @@ async function canvasToImageBlob(canvas: HTMLCanvasElement, format: ImageFormat,
   return blob;
 }
 
+function ControlledTextarea({
+  value,
+  onChange,
+  placeholder,
+  style,
+  showPasteClear = true
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  style?: any;
+  showPasteClear?: boolean;
+}) {
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      onChange(text);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="input-textarea-wrapper">
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={style}
+        className="form-textarea"
+      />
+      {showPasteClear && (
+        <div className="textarea-actions">
+          <button type="button" className="textarea-action-btn" title="粘贴" onClick={handlePaste}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            粘贴
+          </button>
+          {value && (
+            <button type="button" className="textarea-action-btn clear-btn" title="清空" onClick={() => onChange("")}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              清空
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<ToolCategory | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (message: string) => {
@@ -105,31 +156,61 @@ export default function App() {
     }
   }, [toast]);
 
-  const filteredTools = useMemo(() => 
-    tools.filter(t => activeCategory === "all" || t.category === activeCategory), [activeCategory]);
+  const filteredTools = useMemo(() => {
+    return tools.filter(t => {
+      const matchesCategory = activeCategory === "all" || t.category === activeCategory;
+      const matchesSearch = searchQuery.trim() === "" ||
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.id.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [activeCategory, searchQuery]);
 
   return (
     <div className="page-shell">
       <header className="header-container">
         <div className="header-left">
-          <h1>开发者工具</h1>
+          <h1 className="header-title">开发者工具</h1>
           <p>简洁、安全、强大的工具集，本地处理保障隐私。</p>
         </div>
-        <nav className="header-right">
-          <div className="category-row">
-            {categories.map(c => (
-              <button key={c.id} onClick={() => setActiveCategory(c.id)}
-                className={c.id === activeCategory ? "category-pill is-active" : "category-pill"}>
-                {c.label}
-              </button>
-            ))}
+        <div className="header-search-nav">
+          <div className="search-box-container">
+            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input 
+              type="text" 
+              placeholder="搜索工具 (例如: AES, Base64, JSON...)" 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button className="search-clear-btn" onClick={() => setSearchQuery("")}>×</button>
+            )}
           </div>
-        </nav>
+          <nav className="header-right">
+            <div className="category-row">
+              {categories.map(c => (
+                <button key={c.id} onClick={() => setActiveCategory(c.id)}
+                  className={c.id === activeCategory ? "category-pill is-active" : "category-pill"}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </div>
       </header>
       
       <section className="tool-grid">
         {filteredTools.map(t => <ToolPanel key={t.id} tool={t} onCopy={copyText} />)}
+        {filteredTools.length === 0 && (
+          <div className="no-results-panel">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+            <p>未找到匹配的工具，请尝试其他关键词</p>
+          </div>
+        )}
       </section>
+
 
       {toast && (
         <div className="toast-container">
@@ -455,7 +536,7 @@ function QrCodeTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
         </select>
       </>
     }>
-      <textarea value={value} onChange={event => setValue(event.target.value)} placeholder="输入文本、链接或其他内容..." />
+      <ControlledTextarea value={value} onChange={setValue} placeholder="输入文本、链接或其他内容..." />
       <div className="form-grid">
         <label><span>尺寸</span><input type="number" min="96" max="1024" value={size} onChange={event => setSize(Number(event.target.value))} /></label>
         <label><span>边距模块</span><input type="number" min="0" max="8" value={margin} onChange={event => setMargin(Number(event.target.value))} /></label>
@@ -533,6 +614,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
 function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [unit, setUnit] = useState<"s" | "ms" | "us" | "ns">("s");
+  const [autoDetect, setAutoDetect] = useState(true);
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
   const [result, setResult] = useState<any>(null);
 
@@ -545,14 +627,36 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
     if (!input) return;
     try {
       let ms = 0;
-      const val = BigInt(input.replace(/\D/g, ""));
-      if (unit === "s") ms = Number(val * 1000n);
-      else if (unit === "ms") ms = Number(val);
-      else if (unit === "us") ms = Number(val / 1000n);
-      else if (unit === "ns") ms = Number(val / 1000000n);
+      const cleanInput = input.replace(/\D/g, "");
+      const val = BigInt(cleanInput);
+      
+      let finalUnit = unit;
+      if (autoDetect) {
+        if (cleanInput.length >= 19) {
+          finalUnit = "ns";
+        } else if (cleanInput.length >= 16) {
+          finalUnit = "us";
+        } else if (cleanInput.length >= 13) {
+          finalUnit = "ms";
+        } else {
+          finalUnit = "s";
+        }
+      }
+
+      if (finalUnit === "s") ms = Number(val * 1000n);
+      else if (finalUnit === "ms") ms = Number(val);
+      else if (finalUnit === "us") ms = Number(val / 1000n);
+      else if (finalUnit === "ns") ms = Number(val / 1000000n);
       const d = new Date(ms);
       const baseMs = BigInt(ms);
-      setResult({ date: d.toLocaleString(), s: String(baseMs / 1000n), ms: String(baseMs), us: String(baseMs * 1000n), ns: String(baseMs * 1000000n) });
+      setResult({ 
+        date: d.toLocaleString(), 
+        unitDetected: finalUnit,
+        s: String(baseMs / 1000n), 
+        ms: String(baseMs), 
+        us: String(baseMs * 1000n), 
+        ns: String(baseMs * 1000000n) 
+      });
     } catch { alert("无效格式"); }
   };
 
@@ -571,13 +675,28 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
           </div>
         </div>
       </div>
-      <div className="button-row" style={{gap: "8px"}}>
-        <input style={{flex: 1}} value={input} onChange={e => setInput(e.target.value)} placeholder="输入数值..." />
-        <select style={{width: "80px"}} value={unit} onChange={e => setUnit(e.target.value as any)}><option value="s">秒</option><option value="ms">毫秒</option><option value="us">微秒</option><option value="ns">纳秒</option></select>
-        <button onClick={convert}>转换</button>
+      <div className="button-row" style={{gap: "8px", flexDirection: "column"}}>
+        <div style={{display: "flex", gap: "8px", width: "100%"}}>
+          <input style={{flex: 1}} value={input} onChange={e => setInput(e.target.value)} placeholder="输入时间戳数字..." />
+          <select style={{width: "80px"}} value={unit} disabled={autoDetect} onChange={e => setUnit(e.target.value as any)}>
+            <option value="s">秒</option><option value="ms">毫秒</option><option value="us">微秒</option><option value="ns">纳秒</option>
+          </select>
+          <button onClick={convert}>转换</button>
+        </div>
+        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "0 4px"}}>
+          <label className="check-row" style={{userSelect: "none"}}>
+            <input type="checkbox" checked={autoDetect} onChange={e => setAutoDetect(e.target.checked)} />
+            <span>智能自动检测时间精度 (按位数识别)</span>
+          </label>
+        </div>
       </div>
       {result && (
         <div style={{marginTop: "16px", borderTop: "1px solid var(--card-border)", paddingTop: "16px"}}>
+          {result.unitDetected && autoDetect && (
+            <div className="detected-badge" style={{fontSize: "11px", color: "var(--accent)", marginBottom: "8px"}}>
+              🎯 自动识别精度: <strong>{result.unitDetected === "s" ? "秒 (s)" : result.unitDetected === "ms" ? "毫秒 (ms)" : result.unitDetected === "us" ? "微秒 (us)" : "纳秒 (ns)"}</strong>
+            </div>
+          )}
           <div style={{marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "flex-end"}}>
             <div><span style={{fontSize: "12px", color: "var(--text-secondary)"}}>本地时间</span><div style={{fontSize: "18px", fontWeight: "600", color: "var(--accent)"}}>{result.date}</div></div>
             <button className="secondary-button" onClick={() => onCopy(result.date)}>复制日期</button>
@@ -600,49 +719,125 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
 function JwtTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [token, setToken] = useState("");
   const [parts, setParts] = useState({ header: "", payload: "" });
+  const [claims, setClaims] = useState<Array<{ claim: string; value: string; desc: string }>>([]);
+
   const decode = () => {
     try {
       const segments = token.split(".");
+      if (segments.length < 2) {
+        throw new Error("格式错误");
+      }
+      
+      const headerStr = decodeBase64Url(segments[0]);
+      const payloadStr = decodeBase64Url(segments[1]);
+      
+      const headerJson = JSON.parse(headerStr);
+      const payloadJson = JSON.parse(payloadStr);
+
       setParts({
-        header: JSON.stringify(JSON.parse(atob(segments[0])), null, 2),
-        payload: JSON.stringify(JSON.parse(atob(segments[1].replace(/-/g, "+").replace(/_/g, "/"))), null, 2)
+        header: JSON.stringify(headerJson, null, 2),
+        payload: JSON.stringify(payloadJson, null, 2)
       });
-    } catch { setParts({ header: "失败", payload: "无效格式" }); }
+
+      const parsedClaims: Array<{ claim: string; value: string; desc: string }> = [];
+
+      if (payloadJson.exp !== undefined) {
+        const date = new Date(Number(payloadJson.exp) * 1000);
+        const expired = Date.now() > date.getTime();
+        const diff = Math.floor((date.getTime() - Date.now()) / 1000);
+        let statusText = "";
+        if (expired) {
+          const absDiff = Math.abs(diff);
+          const days = Math.floor(absDiff / 86400);
+          const hours = Math.floor((absDiff % 86400) / 3600);
+          statusText = `🔴 已过期 (${days > 0 ? days + "天" : ""}${hours}小时前)`;
+        } else {
+          const days = Math.floor(diff / 86400);
+          const hours = Math.floor((diff % 86400) / 3600);
+          statusText = `🟢 有效 (剩 ${days > 0 ? days + "天" : ""}${hours}小时)`;
+        }
+        parsedClaims.push({ claim: "过期时间 (exp)", value: date.toLocaleString(), desc: statusText });
+      }
+
+      if (payloadJson.iat !== undefined) {
+        parsedClaims.push({ claim: "签发时间 (iat)", value: new Date(Number(payloadJson.iat) * 1000).toLocaleString(), desc: "Token 签发时刻" });
+      }
+      if (payloadJson.nbf !== undefined) {
+        parsedClaims.push({ claim: "生效时间 (nbf)", value: new Date(Number(payloadJson.nbf) * 1000).toLocaleString(), desc: "Token 生效时刻" });
+      }
+      if (payloadJson.sub !== undefined) {
+        parsedClaims.push({ claim: "主题 (sub)", value: String(payloadJson.sub), desc: "用户或业务主体 ID" });
+      }
+      if (payloadJson.iss !== undefined) {
+        parsedClaims.push({ claim: "签发方 (iss)", value: String(payloadJson.iss), desc: "Token 签署人/服务器" });
+      }
+      if (payloadJson.aud !== undefined) {
+        parsedClaims.push({ claim: "受众 (aud)", value: String(payloadJson.aud), desc: "Token 接收方" });
+      }
+
+      setClaims(parsedClaims);
+    } catch { 
+      setParts({ header: "解析失败", payload: "无效的 JWT Token 结构" }); 
+      setClaims([]);
+    }
   };
+
   return (
     <CardFrame tool={tool}>
-      <textarea value={token} onChange={e => setToken(e.target.value)} placeholder="粘贴 JWT Token..." style={{minHeight: "80px"}} />
+      <ControlledTextarea value={token} onChange={setToken} placeholder="在此处粘贴 JWT Token..." style={{minHeight: "80px"}} />
       <button onClick={decode}>解析</button>
       {parts.header && (
-        <div className="form-grid" style={{marginTop: "12px"}}>
-          <div><div style={{display: "flex", justifyContent: "space-between"}}><span>Header</span><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.header)}>复制</button></div><textarea readOnly value={parts.header} style={{minHeight: "150px", fontSize: "12px"}} /></div>
-          <div><div style={{display: "flex", justifyContent: "space-between"}}><span>Payload</span><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.payload)}>复制</button></div><textarea readOnly value={parts.payload} style={{minHeight: "150px", fontSize: "12px"}} /></div>
+        <div className="tool-card-body" style={{gap: "12px", marginTop: "4px"}}>
+          <div className="form-grid">
+            <div>
+              <div style={{display: "flex", justifyContent: "space-between", marginBottom: "4px"}}><strong>Header</strong><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.header)}>复制</button></div>
+              <textarea readOnly value={parts.header} style={{minHeight: "150px", fontSize: "11px", width: "100%", fontFamily: "var(--mono-font)"}} />
+            </div>
+            <div>
+              <div style={{display: "flex", justifyContent: "space-between", marginBottom: "4px"}}><strong>Payload</strong><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.payload)}>复制</button></div>
+              <textarea readOnly value={parts.payload} style={{minHeight: "150px", fontSize: "11px", width: "100%", fontFamily: "var(--mono-font)"}} />
+            </div>
+          </div>
+          {claims.length > 0 && (
+            <div className="jwt-claims-panel" style={{borderTop: "1px solid var(--card-border)", paddingTop: "12px", marginTop: "4px"}}>
+              <span style={{fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "8px", display: "block"}}>标准 Claim 解析</span>
+              <div className="jwt-claims-list" style={{display: "flex", flexDirection: "column", gap: "6px"}}>
+                {claims.map((c, i) => (
+                  <div key={i} className="jwt-claim-row" style={{display: "flex", justifyContent: "space-between", fontSize: "12px", padding: "6px 8px", background: "var(--input-bg)", borderRadius: "6px", alignItems: "center"}}>
+                    <span style={{fontWeight: "500"}}>{c.claim}</span>
+                    <span style={{fontFamily: "var(--mono-font)", color: "var(--text-primary)"}}>{c.value}</span>
+                    <span style={{fontWeight: "600", fontSize: "11px"}}>{c.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </CardFrame>
   );
 }
 
-// --- 其他工具简写版本以匹配组件接口 ---
+// --- 其他工具升级版本以匹配组件接口 ---
 function Base64Tool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
   const run = (m: "e"|"d") => { try { setOutput({ value: m === "e" ? encodeBase64(input) : decodeBase64(input), error: "" }); } catch(e) { setOutput({ value: "", error: "失败" }); } };
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><textarea value={input} onChange={e => setInput(e.target.value)} /><div className="button-row"><button onClick={() => run("e")}>编码</button><button className="secondary-button" onClick={() => run("d")}>解码</button></div></CardFrame>;
+  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><ControlledTextarea value={input} onChange={setInput} placeholder="输入要编码或解码的文本..." /><div className="button-row"><button onClick={() => run("e")}>编码</button><button className="secondary-button" onClick={() => run("d")}>解码</button></div></CardFrame>;
 }
 
 function UrlTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
   const run = (m: "e"|"d") => { try { setOutput({ value: m === "e" ? encodeUrl(input, true) : decodeUrl(input, true), error: "" }); } catch(e) { setOutput({ value: "", error: "失败" }); } };
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><textarea value={input} onChange={e => setInput(e.target.value)} /><div className="button-row"><button onClick={() => run("e")}>编码</button><button className="secondary-button" onClick={() => run("d")}>解码</button></div></CardFrame>;
+  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><ControlledTextarea value={input} onChange={setInput} placeholder="输入要 Encode 或 Decode 的 URL..." /><div className="button-row"><button onClick={() => run("e")}>编码</button><button className="secondary-button" onClick={() => run("d")}>解码</button></div></CardFrame>;
 }
 
 function HexTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
-  const run = (m: "t"|"h") => { try { setOutput({ value: m === "t" ? textToHex(input) : hexToText(input), error: "" }); } catch(e) { setOutput({ value: "", error: "失败" }); } };
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><textarea value={input} onChange={e => setInput(e.target.value)} /><div className="button-row"><button onClick={() => run("t")}>Text to Hex</button><button className="secondary-button" onClick={() => run("h")}>Hex to Text</button></div></CardFrame>;
+  const run = (m: "t"|"h") => { try { setOutput({ value: m === "t" ? textToHex(input) : hexToText(input), error: "" }); } catch(e) { setOutput({ value: "", error: "Hex 输入不合法，请检查是否为偶数长度且仅包含十六进制字符" }); } };
+  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><ControlledTextarea value={input} onChange={setInput} placeholder="输入文本或 Hex 字符串 (支持空格分隔)..." /><div className="button-row"><button onClick={() => run("t")}>Text to Hex</button><button className="secondary-button" onClick={() => run("h")}>Hex to Text</button></div></CardFrame>;
 }
 
 function RandomTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
@@ -664,11 +859,90 @@ function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
   const [ivHex, setIvHex] = useState("");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
-  const gen = () => { const m = buildAesMaterial(256, mode === "AES-GCM" ? 12 : 16); setKeyHex(m.keyHex); setIvHex(m.ivHex); };
-  const run = async (a: "e"|"d") => { try { setOutput({ value: a === "e" ? await encryptAes({ mode, keyHex, ivHex, plainText: input, output: "hex" }) : await decryptAes({ mode, keyHex, ivHex, cipherText: input, input: "hex" }), error: "" }); } catch(e) { setOutput({ value: "", error: "失败" }); } };
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
-    <select value={mode} onChange={e => setMode(e.target.value as any)}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
-  }><div className="form-grid"><div><span>Key</span><input value={keyHex} onChange={e => setKeyHex(e.target.value)} /></div><div><span>IV</span><input value={ivHex} onChange={e => setIvHex(e.target.value)} /></div></div><button className="secondary-button" onClick={gen}>随机生成 Key/IV</button><textarea value={input} onChange={e => setInput(e.target.value)} /><div className="button-row"><button onClick={() => run("e")}>加密</button><button className="secondary-button" onClick={() => run("d")}>解密</button></div></CardFrame>;
+
+  const gen = () => { 
+    const m = buildAesMaterial(256, mode === "AES-GCM" ? 12 : 16); 
+    setKeyHex(m.keyHex); 
+    setIvHex(m.ivHex); 
+  };
+
+  const isKeyValid = useMemo(() => {
+    const cleaned = keyHex.trim().replace(/\s+/g, "");
+    if (!cleaned) return null;
+    const isHex = /^[0-9a-fA-F]*$/.test(cleaned);
+    const len = cleaned.length;
+    const isCorrectLen = len === 32 || len === 48 || len === 64;
+    return isHex && isCorrectLen;
+  }, [keyHex]);
+
+  const isIvValid = useMemo(() => {
+    const cleaned = ivHex.trim().replace(/\s+/g, "");
+    if (!cleaned) return null;
+    const isHex = /^[0-9a-fA-F]*$/.test(cleaned);
+    const len = cleaned.length;
+    const isCorrectLen = mode === "AES-GCM" ? len === 24 : len === 32;
+    return isHex && isCorrectLen;
+  }, [ivHex, mode]);
+
+  const run = async (a: "e"|"d") => { 
+    try { 
+      setOutput({ 
+        value: a === "e" 
+          ? await encryptAes({ mode, keyHex: keyHex.trim(), ivHex: ivHex.trim(), plainText: input, output: "hex" }) 
+          : await decryptAes({ mode, keyHex: keyHex.trim(), ivHex: ivHex.trim(), cipherText: input, input: "hex" }), 
+        error: "" 
+      }); 
+    } catch(e) { 
+      setOutput({ value: "", error: "加解密失败，请检查 Key/IV 长度及格式是否正确" }); 
+    } 
+  };
+
+  return (
+    <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
+      <select value={mode} onChange={e => setMode(e.target.value as any)}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
+    }>
+      <div className="form-grid" style={{gap: "12px"}}>
+        <div style={{display: "flex", flexDirection: "column"}}>
+          <div style={{display: "flex", justifyContent: "space-between"}}>
+            <span style={{fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)"}}>KEY (十六进制)</span>
+            {isKeyValid !== null && (
+              <span style={{fontSize: "11px", fontWeight: "600", color: isKeyValid ? "var(--accent)" : "var(--danger)"}}>
+                {isKeyValid ? "✔ 格式正确" : "✘ 应为32/48/64位"}
+              </span>
+            )}
+          </div>
+          <input 
+            value={keyHex} 
+            onChange={e => setKeyHex(e.target.value)} 
+            placeholder="32位/48位/64位十六进制" 
+            className={isKeyValid === false ? "is-invalid" : isKeyValid === true ? "is-valid" : ""}
+          />
+        </div>
+        <div style={{display: "flex", flexDirection: "column"}}>
+          <div style={{display: "flex", justifyContent: "space-between"}}>
+            <span style={{fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)"}}>IV (十六进制)</span>
+            {isIvValid !== null && (
+              <span style={{fontSize: "11px", fontWeight: "600", color: isIvValid ? "var(--accent)" : "var(--danger)"}}>
+                {isIvValid ? "✔ 格式正确" : mode === "AES-GCM" ? "应为24位" : "应为32位"}
+              </span>
+            )}
+          </div>
+          <input 
+            value={ivHex} 
+            onChange={e => setIvHex(e.target.value)} 
+            placeholder={mode === "AES-GCM" ? "24位十六进制" : "32位十六进制"} 
+            className={isIvValid === false ? "is-invalid" : isIvValid === true ? "is-valid" : ""}
+          />
+        </div>
+      </div>
+      <button className="secondary-button" style={{alignSelf: "flex-start"}} onClick={gen}>随机生成 Key/IV (256-bit)</button>
+      <ControlledTextarea value={input} onChange={setInput} placeholder="输入要加密的明文，或解密的 Hex 密文..." />
+      <div className="button-row">
+        <button onClick={() => run("e")} disabled={!keyHex || !ivHex}>加密</button>
+        <button className="secondary-button" onClick={() => run("d")} disabled={!keyHex || !ivHex}>解密</button>
+      </div>
+    </CardFrame>
+  );
 }
 
 function HashTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
@@ -678,12 +952,12 @@ function HashTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) 
   const run = async () => setOutput({ value: await digestText(algo, input), error: "" });
   return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
     <select value={algo} onChange={e => setAlgo(e.target.value)}><option value="SHA-256">SHA-256</option><option value="SHA-512">SHA-512</option></select>
-  }><textarea value={input} onChange={e => setInput(e.target.value)} /><button onClick={run}>计算摘要</button></CardFrame>;
+  }><ControlledTextarea value={input} onChange={setInput} placeholder="输入要计算摘要的文本..." /><button onClick={run}>计算摘要</button></CardFrame>;
 }
 
 function JsonTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
-  const run = (m: "f"|"m") => { try { const p = JSON.parse(input); setOutput({ value: m === "f" ? JSON.stringify(p, null, 2) : JSON.stringify(p), error: "" }); } catch(e) { setOutput({ value: "", error: "无效 JSON" }); } };
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><textarea value={input} onChange={e => setInput(e.target.value)} /><div className="button-row"><button onClick={() => run("f")}>格式化</button><button className="secondary-button" onClick={() => run("m")}>压缩</button></div></CardFrame>;
+  const run = (m: "f"|"m") => { try { const p = JSON.parse(input); setOutput({ value: m === "f" ? JSON.stringify(p, null, 2) : JSON.stringify(p), error: "" }); } catch(e) { setOutput({ value: "", error: "无效 JSON 格式" }); } };
+  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><ControlledTextarea value={input} onChange={setInput} placeholder="粘贴要格式化或压缩的 JSON..." /><div className="button-row"><button onClick={() => run("f")}>格式化</button><button className="secondary-button" onClick={() => run("m")}>压缩</button></div></CardFrame>;
 }
