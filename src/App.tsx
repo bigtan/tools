@@ -627,16 +627,19 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
     if (!input) return;
     try {
       let ms = 0;
-      const cleanInput = input.replace(/\D/g, "");
-      const val = BigInt(cleanInput);
-      
+      const trimmed = input.trim();
+      const negative = trimmed.startsWith("-");
+      const digits = trimmed.replace(/\D/g, "");
+      if (!digits) throw new Error("无数字");
+      const val = (negative ? -1n : 1n) * BigInt(digits);
+
       let finalUnit = unit;
       if (autoDetect) {
-        if (cleanInput.length >= 19) {
+        if (digits.length >= 19) {
           finalUnit = "ns";
-        } else if (cleanInput.length >= 16) {
+        } else if (digits.length >= 16) {
           finalUnit = "us";
-        } else if (cleanInput.length >= 13) {
+        } else if (digits.length >= 13) {
           finalUnit = "ms";
         } else {
           finalUnit = "s";
