@@ -598,7 +598,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
     }>
       <div className="button-row" style={{justifyContent: "space-between", alignItems: "center"}}>
         <select value={size} onChange={e => setSize(e.target.value)} style={{width: "120px"}}>
-          {type === "RSA" ? (<><option value="2048">2048 bit</option><option value="4096">4096 bit</option></>) : (<><option value="P-256">P-256</option><option value="P-384">P-384</option></>)}
+          {type === "RSA" ? (<><option value="2048">2048 bit</option><option value="4096">4096 bit</option></>) : (<><option value="P-256">P-256</option><option value="P-384">P-384</option><option value="P-521">P-521</option></>)}
         </select>
         <button onClick={generate}>生成密钥对</button>
       </div>
