@@ -1,4 +1,4 @@
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -56,6 +56,15 @@ type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
 type QrErrorLevel = "L" | "M" | "Q" | "H";
 type EccCurve = "P-256" | "P-384" | "P-521";
 type DigestAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
+type TimestampUnit = "s" | "ms" | "us" | "ns";
+type TimestampResult = {
+  date: string;
+  unitDetected: TimestampUnit;
+  s: string;
+  ms: string;
+  us: string;
+  ns: string;
+};
 
 const imageFormatOptions: Array<{ value: ImageFormat; label: string; extension: string }> = [
   { value: "image/webp", label: "WebP", extension: "webp" },
@@ -97,7 +106,7 @@ function ControlledTextarea({
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  style?: any;
+  style?: CSSProperties;
   showPasteClear?: boolean;
 }) {
   const handlePaste = async () => {
@@ -591,7 +600,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
 
   return (
     <CardFrame tool={tool} controls={
-      <select value={type} onChange={e => setType(e.target.value as any)}>
+      <select value={type} onChange={e => setType(e.target.value as "RSA" | "ECC")}>
         <option value="RSA">RSA</option><option value="ECC">ECC</option>
       </select>
     }>
@@ -628,10 +637,10 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
 // --- Timestamp Tool ---
 function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
-  const [unit, setUnit] = useState<"s" | "ms" | "us" | "ns">("s");
+  const [unit, setUnit] = useState<TimestampUnit>("s");
   const [autoDetect, setAutoDetect] = useState(true);
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<TimestampResult | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
@@ -696,7 +705,7 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
       <div className="button-row" style={{gap: "8px", flexDirection: "column"}}>
         <div style={{display: "flex", gap: "8px", width: "100%"}}>
           <input style={{flex: 1}} value={input} onChange={e => setInput(e.target.value)} placeholder="输入时间戳数字..." />
-          <select style={{width: "80px"}} value={unit} disabled={autoDetect} onChange={e => setUnit(e.target.value as any)}>
+          <select style={{width: "80px"}} value={unit} disabled={autoDetect} onChange={e => setUnit(e.target.value as TimestampUnit)}>
             <option value="s">秒</option><option value="ms">毫秒</option><option value="us">微秒</option><option value="ns">纳秒</option>
           </select>
           <button onClick={convert}>转换</button>
@@ -720,7 +729,7 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
             <button className="secondary-button" onClick={() => onCopy(result.date)}>复制日期</button>
           </div>
           <div className="form-grid" style={{gap: "8px"}}>
-            {["s", "ms", "us", "ns"].map(u => (
+            {(["s", "ms", "us", "ns"] as TimestampUnit[]).map(u => (
               <div key={u} className="output-panel" style={{padding: "8px"}}>
                 <div style={{display: "flex", justifyContent: "space-between"}}><span style={{fontSize: "11px", color: "var(--text-secondary)"}}>{u}</span><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(result[u])}>复制</button></div>
                 <div style={{fontSize: "13px", fontFamily: "var(--mono-font)"}}>{result[u]}</div>
@@ -956,7 +965,7 @@ function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
 
   return (
     <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
-      <select value={mode} onChange={e => setMode(e.target.value as any)}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
+      <select value={mode} onChange={e => setMode(e.target.value as "AES-GCM" | "AES-CBC")}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
     }>
       <div className="form-grid" style={{gap: "12px"}}>
         <div style={{display: "flex", flexDirection: "column"}}>
