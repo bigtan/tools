@@ -154,13 +154,13 @@ async function importEccPublicKey(pubBytes: Uint8Array): Promise<CryptoKey> {
     try {
       return await crypto.subtle.importKey(
         "spki",
-        pubBytes as any,
+        pubBytes as BufferSource,
         { name: "ECDSA", namedCurve: curve },
         true,
         ["verify"]
       );
-    } catch (e) {
-      // try next
+    } catch {
+      // try the next curve
     }
   }
   throw new Error("无法识别的 ECC 公钥格式");
@@ -185,15 +185,15 @@ export async function generateCsr(
 
   let privateKey: CryptoKey;
   let publicKey: CryptoKey;
-  let alg: any;
+  let alg: RsaHashedImportParams | (EcKeyImportParams & { hash: string });
 
   if (type === "RSA") {
     alg = {
       name: "RSASSA-PKCS1-v1_5",
       hash: "SHA-256"
     };
-    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as any, alg, true, ["sign"]);
-    publicKey = await crypto.subtle.importKey("spki", pubBytes as any, alg, true, ["verify"]);
+    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as BufferSource, alg, true, ["sign"]);
+    publicKey = await crypto.subtle.importKey("spki", pubBytes as BufferSource, alg, true, ["verify"]);
   } else {
     publicKey = await importEccPublicKey(pubBytes);
     const curve = (publicKey.algorithm as EcKeyAlgorithm).namedCurve;
@@ -202,7 +202,7 @@ export async function generateCsr(
       namedCurve: curve,
       hash: "SHA-256"
     };
-    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as any, alg, true, ["sign"]);
+    privateKey = await crypto.subtle.importKey("pkcs8", privBytes as BufferSource, alg, true, ["sign"]);
   }
 
   const nameParts: Array<Record<string, string[]>> = [];

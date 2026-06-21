@@ -508,7 +508,6 @@ function QrCodeTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
     const svgText = getSvgText();
     if (!svgText) return;
     const svgUrl = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
-    let blob: Blob | null = null;
     try {
       const image = new Image();
       image.decoding = "async";
@@ -524,17 +523,16 @@ function QrCodeTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
         context.fillRect(0, 0, canvas.width, canvas.height);
       }
       context.drawImage(image, 0, 0, size, size);
-      blob = await canvasToImageBlob(canvas, format, 1);
+      const blob = await canvasToImageBlob(canvas, format, 1);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `qrcode.${currentFormat.extension}`;
+      anchor.click();
+      URL.revokeObjectURL(url);
     } finally {
       URL.revokeObjectURL(svgUrl);
     }
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `qrcode.${currentFormat.extension}`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -572,7 +570,10 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
   const [csr, setCsr] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => { setSize(type === "RSA" ? "2048" : "P-256"); }, [type]);
+  const changeType = (next: "RSA" | "ECC") => {
+    setType(next);
+    setSize(next === "RSA" ? "2048" : "P-256");
+  };
 
   const generate = async () => {
     setError("");
@@ -600,7 +601,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
 
   return (
     <CardFrame tool={tool} controls={
-      <select value={type} onChange={e => setType(e.target.value as "RSA" | "ECC")}>
+      <select value={type} onChange={e => changeType(e.target.value as "RSA" | "ECC")}>
         <option value="RSA">RSA</option><option value="ECC">ECC</option>
       </select>
     }>
@@ -639,7 +640,7 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
   const [input, setInput] = useState("");
   const [unit, setUnit] = useState<TimestampUnit>("s");
   const [autoDetect, setAutoDetect] = useState(true);
-  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [result, setResult] = useState<TimestampResult | null>(null);
 
   useEffect(() => {
@@ -873,7 +874,7 @@ function UrlTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
 function HexTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
-  const run = (m: "t"|"h") => { try { setOutput({ value: m === "t" ? textToHex(input) : hexToText(input), error: "" }); } catch(e) { setOutput({ value: "", error: "Hex 输入不合法，请检查是否为偶数长度且仅包含十六进制字符" }); } };
+  const run = (m: "t"|"h") => { try { setOutput({ value: m === "t" ? textToHex(input) : hexToText(input), error: "" }); } catch { setOutput({ value: "", error: "Hex 输入不合法，请检查是否为偶数长度且仅包含十六进制字符" }); } };
   return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><ControlledTextarea value={input} onChange={setInput} placeholder="输入文本或 Hex 字符串 (支持空格分隔)..." /><div className="button-row"><button onClick={() => run("t")}>Text to Hex</button><button className="secondary-button" onClick={() => run("h")}>Hex to Text</button></div></CardFrame>;
 }
 
@@ -958,9 +959,9 @@ function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
           : await decryptAes({ mode, keyHex: keyHex.trim(), ivHex: ivHex.trim(), cipherText: input, input: "hex" }), 
         error: "" 
       }); 
-    } catch(e) { 
-      setOutput({ value: "", error: "加解密失败，请检查 Key/IV 长度及格式是否正确" }); 
-    } 
+    } catch {
+      setOutput({ value: "", error: "加解密失败，请检查 Key/IV 长度及格式是否正确" });
+    }
   };
 
   return (
