@@ -53,6 +53,7 @@ const emptyOutput: OutputState = { value: "", error: "" };
 type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
 type QrErrorLevel = "L" | "M" | "Q" | "H";
 type EccCurve = "P-256" | "P-384" | "P-521";
+type DigestAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
 
 const imageFormatOptions: Array<{ value: ImageFormat; label: string; extension: string }> = [
   { value: "image/webp", label: "WebP", extension: "webp" },
@@ -963,11 +964,11 @@ function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
 
 function HashTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [input, setInput] = useState("");
-  const [algo, setAlgo] = useState<any>("SHA-256");
+  const [algo, setAlgo] = useState<DigestAlgorithm>("SHA-256");
   const [output, setOutput] = useState(emptyOutput);
   const run = async () => setOutput({ value: await digestText(algo, input), error: "" });
   return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
-    <select value={algo} onChange={e => setAlgo(e.target.value)}><option value="SHA-256">SHA-256</option><option value="SHA-512">SHA-512</option></select>
+    <select value={algo} onChange={e => setAlgo(e.target.value as DigestAlgorithm)}><option value="SHA-256">SHA-256</option><option value="SHA-384">SHA-384</option><option value="SHA-512">SHA-512</option></select>
   }><ControlledTextarea value={input} onChange={setInput} placeholder="输入要计算摘要的文本..." /><button onClick={run}>计算摘要</button></CardFrame>;
 }
 
