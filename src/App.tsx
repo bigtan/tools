@@ -52,6 +52,7 @@ type OutputState = { value: string; error: string; };
 const emptyOutput: OutputState = { value: "", error: "" };
 type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
 type QrErrorLevel = "L" | "M" | "Q" | "H";
+type EccCurve = "P-256" | "P-384" | "P-521";
 
 const imageFormatOptions: Array<{ value: ImageFormat; label: string; extension: string }> = [
   { value: "image/webp", label: "WebP", extension: "webp" },
@@ -558,21 +559,32 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
   const [keys, setKeys] = useState({ privateKey: "", publicKey: "" });
   const [dn, setDn] = useState({ commonName: "", organization: "", country: "CN" });
   const [csr, setCsr] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => { setSize(type === "RSA" ? "2048" : "P-256"); }, [type]);
 
   const generate = async () => {
+    setError("");
     try {
-      const res = type === "RSA" ? await generateRsaKeyPair(Number(size)) : await generateEccKeyPair(size as any);
+      const res = type === "RSA" ? await generateRsaKeyPair(Number(size)) : await generateEccKeyPair(size as EccCurve);
       setKeys(res);
       setCsr("");
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "密钥对生成失败");
+    }
   };
 
   const createCsr = async () => {
     if (!keys.privateKey) return;
-    const res = await generateCsr(keys, dn, type);
-    setCsr(res);
+    setError("");
+    try {
+      const res = await generateCsr(keys, dn, type);
+      setCsr(res);
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "CSR 生成失败");
+    }
   };
 
   return (
@@ -587,6 +599,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
         </select>
         <button onClick={generate}>生成密钥对</button>
       </div>
+      {error && <p className="form-error">{error}</p>}
       {keys.privateKey && (
         <div className="tool-card-body" style={{marginTop: "8px", gap: "16px"}}>
           <div className="form-grid">
