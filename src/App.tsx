@@ -614,8 +614,8 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
       {keys.privateKey && (
         <div className="tool-card-body" style={{marginTop: "8px", gap: "16px"}}>
           <div className="form-grid">
-            <div><span>Private Key</span><textarea readOnly value={keys.privateKey} style={{minHeight: "220px", fontSize: "11px", fontFamily: "var(--mono-font)"}} /></div>
-            <div><span>Public Key</span><textarea readOnly value={keys.publicKey} style={{minHeight: "220px", fontSize: "11px", fontFamily: "var(--mono-font)"}} /></div>
+            <div><span>Private Key</span><textarea readOnly value={keys.privateKey} className="code-area" style={{minHeight: "220px"}} /></div>
+            <div><span>Public Key</span><textarea readOnly value={keys.publicKey} className="code-area" style={{minHeight: "220px"}} /></div>
           </div>
           <div style={{borderTop: "1px solid var(--card-border)", paddingTop: "16px"}}>
             <span style={{fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "12px", display: "block"}}>CSR 申请信息</span>
@@ -625,7 +625,7 @@ function AsymKeysTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: stri
           {csr && (
             <div className="output-panel">
               <div className="output-head"><strong>CSR PEM</strong><button onClick={() => onCopy(csr)}>复制</button></div>
-              <textarea readOnly value={csr} style={{minHeight: "180px", fontSize: "11px", fontFamily: "var(--mono-font)"}} />
+              <textarea readOnly value={csr} className="code-area" style={{minHeight: "180px"}} />
             </div>
           )}
         </div>
@@ -818,11 +818,11 @@ function JwtTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) =
           <div className="form-grid">
             <div>
               <div style={{display: "flex", justifyContent: "space-between", marginBottom: "4px"}}><strong>Header</strong><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.header)}>复制</button></div>
-              <textarea readOnly value={parts.header} style={{minHeight: "150px", fontSize: "11px", width: "100%", fontFamily: "var(--mono-font)"}} />
+              <textarea readOnly value={parts.header} className="code-area" style={{minHeight: "150px"}} />
             </div>
             <div>
               <div style={{display: "flex", justifyContent: "space-between", marginBottom: "4px"}}><strong>Payload</strong><button className="secondary-button" style={{padding: "2px 6px", fontSize: "10px"}} onClick={() => onCopy(parts.payload)}>复制</button></div>
-              <textarea readOnly value={parts.payload} style={{minHeight: "150px", fontSize: "11px", width: "100%", fontFamily: "var(--mono-font)"}} />
+              <textarea readOnly value={parts.payload} className="code-area" style={{minHeight: "150px"}} />
             </div>
           </div>
           {claims.length > 0 && (
