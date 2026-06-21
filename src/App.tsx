@@ -139,11 +139,10 @@ function ControlledTextarea({
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<ToolCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
 
   const showToast = (message: string) => {
-    setToast(null); // 先清除旧的
-    setTimeout(() => setToast(message), 10);
+    setToast({ id: Date.now(), message });
   };
 
   const copyText = (value: string) => {
@@ -217,10 +216,10 @@ export default function App() {
 
 
       {toast && (
-        <div className="toast-container">
+        <div className="toast-container" key={toast.id}>
           <div className="toast">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            {toast}
+            {toast.message}
           </div>
         </div>
       )}
