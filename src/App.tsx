@@ -22,6 +22,8 @@ import {
   generateCsr
 } from "./lib/crypto";
 import { createRandomString, createUuidList } from "./lib/random";
+import { convertTimestamp } from "./lib/timestamp";
+import type { TimestampUnit } from "./lib/timestamp";
 import type { ToolCategory, ToolDefinition } from "./types";
 
 const tools: ToolDefinition[] = [
@@ -56,7 +58,6 @@ type ImageFormat = "image/jpeg" | "image/webp" | "image/png";
 type QrErrorLevel = "L" | "M" | "Q" | "H";
 type EccCurve = "P-256" | "P-384" | "P-521";
 type DigestAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
-type TimestampUnit = "s" | "ms" | "us" | "ns";
 type TimestampResult = {
   date: string;
   unitDetected: TimestampUnit;
@@ -65,6 +66,11 @@ type TimestampResult = {
   us: string;
   ns: string;
 };
+
+const QR_MIN_SIZE = 96;
+const QR_MAX_SIZE = 1024;
+const QR_MIN_MARGIN = 0;
+const QR_MAX_MARGIN = 8;
 
 const imageFormatOptions: Array<{ value: ImageFormat; label: string; extension: string }> = [
   { value: "image/webp", label: "WebP", extension: "webp" },
@@ -82,6 +88,11 @@ function formatBytes(bytes: number) {
 
 function filenameBase(name: string) {
   return name.replace(/\.[^/.]+$/, "") || "image";
+}
+
+function clampInteger(value: number, minimum: number, maximum: number, fallback: number) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
 }
 
 async function canvasToImageBlob(canvas: HTMLCanvasElement, format: ImageFormat, quality?: number) {
@@ -548,8 +559,8 @@ function QrCodeTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
     }>
       <ControlledTextarea value={value} onChange={setValue} placeholder="输入文本、链接或其他内容..." />
       <div className="form-grid">
-        <label><span>尺寸</span><input type="number" min="96" max="1024" value={size} onChange={event => setSize(Number(event.target.value))} /></label>
-        <label><span>边距模块</span><input type="number" min="0" max="8" value={margin} onChange={event => setMargin(Number(event.target.value))} /></label>
+        <label><span>尺寸</span><input type="number" min={QR_MIN_SIZE} max={QR_MAX_SIZE} value={size} onChange={event => setSize(clampInteger(Number(event.target.value), QR_MIN_SIZE, QR_MAX_SIZE, QR_MIN_SIZE))} /></label>
+        <label><span>边距模块</span><input type="number" min={QR_MIN_MARGIN} max={QR_MAX_MARGIN} value={margin} onChange={event => setMargin(clampInteger(Number(event.target.value), QR_MIN_MARGIN, QR_MAX_MARGIN, QR_MIN_MARGIN))} /></label>
         <label><span>前景色</span><input type="color" value={fgColor} onChange={event => setFgColor(event.target.value)} /></label>
         <label><span>背景色</span><input type="color" value={bgColor} onChange={event => setBgColor(event.target.value)} /></label>
       </div>
@@ -651,41 +662,17 @@ function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: str
   const convert = () => {
     if (!input) return;
     try {
-      let ms = 0;
-      const trimmed = input.trim();
-      const negative = trimmed.startsWith("-");
-      const digits = trimmed.replace(/\D/g, "");
-      if (!digits) throw new Error("无数字");
-      const val = (negative ? -1n : 1n) * BigInt(digits);
-
-      let finalUnit = unit;
-      if (autoDetect) {
-        if (digits.length >= 19) {
-          finalUnit = "ns";
-        } else if (digits.length >= 16) {
-          finalUnit = "us";
-        } else if (digits.length >= 13) {
-          finalUnit = "ms";
-        } else {
-          finalUnit = "s";
-        }
-      }
-
-      if (finalUnit === "s") ms = Number(val * 1000n);
-      else if (finalUnit === "ms") ms = Number(val);
-      else if (finalUnit === "us") ms = Number(val / 1000n);
-      else if (finalUnit === "ns") ms = Number(val / 1000000n);
-      const d = new Date(ms);
-      const baseMs = BigInt(ms);
+      const converted = convertTimestamp(input, unit, autoDetect);
+      const d = new Date(Number(converted.dateMilliseconds));
       setResult({ 
         date: d.toLocaleString(), 
-        unitDetected: finalUnit,
-        s: String(baseMs / 1000n), 
-        ms: String(baseMs), 
-        us: String(baseMs * 1000n), 
-        ns: String(baseMs * 1000000n) 
+        unitDetected: converted.unitDetected,
+        s: converted.s,
+        ms: converted.ms,
+        us: converted.us,
+        ns: converted.ns
       });
-    } catch { alert("无效格式"); }
+    } catch { alert("无效格式或超出日期范围"); }
   };
 
   return (
@@ -898,8 +885,8 @@ function RandomTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
   return (
     <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}>
       <div className="form-grid">
-        <label><span>长度</span><input type="number" min="1" value={length} onChange={e => setLength(Number(e.target.value))} /></label>
-        <label><span>数量</span><input type="number" min="1" value={count} onChange={e => setCount(Number(e.target.value))} /></label>
+        <label><span>长度</span><input type="number" min="1" max="10000" value={length} onChange={e => setLength(Number(e.target.value))} /></label>
+        <label><span>数量</span><input type="number" min="1" max="1000" value={count} onChange={e => setCount(Number(e.target.value))} /></label>
       </div>
       <div className="form-grid" style={{gap: "8px"}}>
         <label className="check-row" style={{userSelect: "none"}}><input type="checkbox" checked={lowercase} onChange={e => setLowercase(e.target.checked)} /><span>小写 a-z</span></label>
@@ -917,7 +904,14 @@ function RandomTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string
 function UuidTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [count, setCount] = useState(5);
   const [output, setOutput] = useState({ value: createUuidList(5), error: "" });
-  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><input type="number" value={count} onChange={e => setCount(Number(e.target.value))} /><button onClick={() => setOutput({value: createUuidList(count), error: ""})}>生成 UUID</button></CardFrame>;
+  const generate = () => {
+    try {
+      setOutput({ value: createUuidList(count), error: "" });
+    } catch (error) {
+      setOutput({ value: "", error: error instanceof Error ? error.message : "生成失败" });
+    }
+  };
+  return <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)}><input type="number" min="1" max="10000" value={count} onChange={e => setCount(Number(e.target.value))} /><button onClick={generate}>生成 UUID</button></CardFrame>;
 }
 
 function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
