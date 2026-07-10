@@ -56,4 +56,16 @@ describe("createUuidList", () => {
     const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     for (const uuid of list) expect(uuid).toMatch(v4);
   });
+
+  it("rejects an excessive UUID count", () => {
+    expect(() => createUuidList(10_001)).toThrow("数量必须是 1 到 10000 之间的整数");
+  });
+});
+
+describe("random string limits", () => {
+  it("rejects invalid and excessive generation requests", () => {
+    expect(() => createRandomString({ ...baseOptions, length: 0 })).toThrow("长度必须是 1 到 10000 之间的整数");
+    expect(() => createRandomString({ ...baseOptions, count: 1_001 })).toThrow("数量必须是 1 到 1000 之间的整数");
+    expect(() => createRandomString({ ...baseOptions, length: 10_000, count: 1_000 })).toThrow("生成结果不能超过");
+  });
 });
