@@ -15,6 +15,7 @@ type TimestampResult = {
 
 
 export function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
+  const [error, setError] = useState("");
   const [input, setInput] = useState("");
   const [unit, setUnit] = useState<TimestampUnit>("s");
   const [autoDetect, setAutoDetect] = useState(true);
@@ -27,7 +28,9 @@ export function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: 
   }, []);
 
   const convert = () => {
-    if (!input) return;
+    setError("");
+    setResult(null);
+    if (!input) { setError("请输入时间戳"); return; }
     try {
       const converted = convertTimestamp(input, unit, autoDetect);
       const d = new Date(Number(converted.dateMilliseconds));
@@ -39,7 +42,7 @@ export function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: 
         us: converted.us,
         ns: converted.ns
       });
-    } catch { alert("无效格式或超出日期范围"); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "无效格式或超出日期范围"); }
   };
 
   return (
@@ -59,7 +62,7 @@ export function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: 
       </div>
       <div className="button-row" style={{gap: "8px", flexDirection: "column"}}>
         <div style={{display: "flex", gap: "8px", width: "100%"}}>
-          <input style={{flex: 1}} value={input} onChange={e => setInput(e.target.value)} placeholder="输入时间戳数字..." />
+          <input style={{flex: 1}} value={input} maxLength={64} onChange={e => { setInput(e.target.value); setResult(null); setError(""); }} placeholder="输入时间戳数字..." />
           <select style={{width: "80px"}} value={unit} disabled={autoDetect} onChange={e => setUnit(e.target.value as TimestampUnit)}>
             <option value="s">秒</option><option value="ms">毫秒</option><option value="us">微秒</option><option value="ns">纳秒</option>
           </select>
@@ -72,6 +75,7 @@ export function TimestampTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: 
           </label>
         </div>
       </div>
+      {error && <p role="alert" className="form-error">{error}</p>}
       {result && (
         <div style={{marginTop: "16px", borderTop: "1px solid var(--card-border)", paddingTop: "16px"}}>
           {result.unitDetected && autoDetect && (

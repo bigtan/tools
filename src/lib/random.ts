@@ -1,3 +1,4 @@
+import { assertTextLength } from "./limits";
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGITS = "0123456789";
@@ -29,6 +30,7 @@ export function createRandomString(options: {
     throw new Error(`生成结果不能超过 ${MAX_RANDOM_OUTPUT_LENGTH.toLocaleString()} 个字符`);
   }
 
+  assertTextLength(options.customCharset);
   const custom = options.customCharset.trim();
   let charset = custom;
 

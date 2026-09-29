@@ -1,3 +1,4 @@
+import { assertTextLength } from "./limits";
 import { bytesToHex, hexToBytes } from "./codec";
 
 const encoder = new TextEncoder();
@@ -27,6 +28,7 @@ export async function digestText(
   algorithm: "SHA-256" | "SHA-384" | "SHA-512",
   value: string
 ) {
+  assertTextLength(value);
   const digest = await crypto.subtle.digest(algorithm, encoder.encode(value));
   return bytesToHex(new Uint8Array(digest));
 }
@@ -51,6 +53,7 @@ export async function encryptAes(options: {
   plainText: string;
   output: "hex" | "base64";
 }) {
+  assertTextLength(options.plainText);
   const keyBytes = hexToBytes(options.keyHex);
   const ivBytes = hexToBytes(options.ivHex);
   const key = await crypto.subtle.importKey(
@@ -77,6 +80,7 @@ export async function decryptAes(options: {
   cipherText: string;
   input: "hex" | "base64";
 }) {
+  assertTextLength(options.cipherText);
   const keyBytes = hexToBytes(options.keyHex);
   const ivBytes = hexToBytes(options.ivHex);
   const key = await crypto.subtle.importKey(

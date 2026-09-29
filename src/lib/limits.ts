@@ -1,5 +1,6 @@
 // Limits are measured in UTF-16 code units unless explicitly stated otherwise.
 export const MAX_TEXT_LENGTH = 1_000_000;
+export const MAX_JSON_OUTPUT_LENGTH = 4_000_000;
 export const MAX_JSON_DEPTH = 100;
 export const MAX_QR_BYTES = 1_000;
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;

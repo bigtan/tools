@@ -20,3 +20,11 @@ it("does not overwrite manual input with a late clipboard response", async () =>
   await act(async () => { resolve("old clipboard"); await pending; });
   expect(onChange).toHaveBeenCalledExactlyOnceWith("typed");
 });
+it("rejects oversized pasted text without silently truncating it", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { readText: vi.fn().mockResolvedValue("a".repeat(1_000_001)) } });
+  const onChange = vi.fn();
+  render(<ControlledTextarea value="original" onChange={onChange} />);
+  fireEvent.click(screen.getByRole("button", { name: "粘贴" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("文本不能超过");
+  expect(onChange).not.toHaveBeenCalled();
+});

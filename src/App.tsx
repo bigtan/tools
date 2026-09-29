@@ -1,3 +1,4 @@
+import { ToolErrorBoundary } from "./components/ToolErrorBoundary";
 import { useMemo, useState, useEffect } from "react";
 import type { ToolCategory } from "./types";
 import { tools, categories } from "./catalog";
@@ -82,7 +83,7 @@ export default function App() {
       <section className="tool-grid">
         {tools.map(t => (
           <div className="tool-slot" key={`${t.id}-${resetVersion}`} hidden={!filteredTools.includes(t)}>
-            <ToolPanel tool={t} onCopy={copyText} />
+            <ToolErrorBoundary><ToolPanel tool={t} onCopy={copyText} /></ToolErrorBoundary>
           </div>
         ))}
         {filteredTools.length === 0 && (

@@ -29,6 +29,7 @@ export function convertTimestamp(
   selectedUnit: TimestampUnit,
   autoDetect: boolean
 ): TimestampConversion {
+  if (input.length > 64) throw new Error("时间戳输入不能超过 64 个字符");
   const normalized = input.trim();
   if (!/^[+-]?\d+$/.test(normalized)) {
     throw new Error("时间戳必须是整数");

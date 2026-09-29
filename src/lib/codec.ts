@@ -1,3 +1,5 @@
+import { assertTextLength } from "./limits";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -26,6 +28,7 @@ function transformByLine(
   preserveEmptyLines: boolean,
   transform: (line: string) => string
 ) {
+  assertTextLength(value);
   return value
     .split(/\r?\n/)
     .map((line) => {
@@ -40,14 +43,17 @@ function transformByLine(
 }
 
 export function encodeBase64(value: string) {
+  assertTextLength(value);
   return btoa(bytesToBinary(encoder.encode(value)));
 }
 
 export function decodeBase64(value: string) {
+  assertTextLength(value);
   return decoder.decode(binaryToBytes(atob(value)));
 }
 
 export function decodeBase64Url(value: string) {
+  assertTextLength(value);
   let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const pad = base64.length % 4;
   if (pad) {
@@ -65,10 +71,12 @@ export function decodeBase64ByLine(value: string, preserveEmptyLines: boolean) {
 }
 
 export function encodeUrl(value: string, componentMode: boolean) {
+  assertTextLength(value);
   return componentMode ? encodeURIComponent(value) : encodeURI(value);
 }
 
 export function decodeUrl(value: string, componentMode: boolean) {
+  assertTextLength(value);
   return componentMode ? decodeURIComponent(value) : decodeURI(value);
 }
 
@@ -77,6 +85,7 @@ export function bytesToHex(bytes: Uint8Array) {
 }
 
 export function hexToBytes(hex: string) {
+  assertTextLength(hex);
   const normalized = hex.trim().replace(/\s+/g, "");
 
   if (!normalized || normalized.length % 2 !== 0 || /[^0-9a-f]/i.test(normalized)) {
@@ -93,6 +102,7 @@ export function hexToBytes(hex: string) {
 }
 
 export function textToHex(value: string) {
+  assertTextLength(value);
   return bytesToHex(encoder.encode(value));
 }
 

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { assertTextLength } from "../lib/limits";
 import type { CSSProperties } from "react";
 import { useAsyncTask } from "../hooks/useAsyncTask";
 
@@ -15,10 +17,18 @@ export function ControlledTextarea({
   showPasteClear?: boolean;
 }) {
   const task = useAsyncTask();
-  const change = (text: string) => { task.invalidate(); onChange(text); };
+  const [validationError, setValidationError] = useState("");
+  const change = (text: string) => {
+    task.invalidate();
+    try { assertTextLength(text); setValidationError(""); onChange(text); }
+    catch (cause) { setValidationError(cause instanceof Error ? cause.message : "输入过大"); }
+  };
   const handlePaste = () => task.run(async () => {
     if (!navigator.clipboard) throw new Error("当前环境不支持剪贴板，请手动粘贴");
-    return navigator.clipboard.readText();
+    setValidationError("");
+    const text = await navigator.clipboard.readText();
+    assertTextLength(text);
+    return text;
   }, onChange);
 
   return (
@@ -31,7 +41,7 @@ export function ControlledTextarea({
         style={style}
         className="form-textarea"
       />
-      {task.error && <p role="alert" className="form-error">粘贴失败：{task.error}</p>}
+      {(validationError || task.error) && <p role="alert" className="form-error">{validationError || `粘贴失败：${task.error}`}</p>}
       {showPasteClear && (
         <div className="textarea-actions">
           <button type="button" className="textarea-action-btn" title="粘贴" disabled={task.busy} onClick={handlePaste}>
