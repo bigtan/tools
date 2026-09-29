@@ -1,4 +1,3 @@
-import { Name, Pkcs10CertificateRequestGenerator } from "@peculiar/x509";
 import { bytesToHex, hexToBytes } from "./codec";
 
 const encoder = new TextEncoder();
@@ -204,6 +203,10 @@ export async function generateCsr(
     };
     privateKey = await crypto.subtle.importKey("pkcs8", privBytes as BufferSource, alg, true, ["sign"]);
   }
+
+  // Load the CSR dependency only when a request is generated.
+  await import("reflect-metadata");
+  const { Name, Pkcs10CertificateRequestGenerator } = await import("@peculiar/x509");
 
   const nameParts: Array<Record<string, string[]>> = [];
   const commonName = dn.commonName?.trim();
