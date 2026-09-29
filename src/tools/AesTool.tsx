@@ -1,3 +1,4 @@
+import { useAsyncTask } from "../hooks/useAsyncTask";
 import { useState, useMemo } from "react";
 import type { ToolDefinition } from "../types";
 import { CardFrame } from "../components/CardFrame";
@@ -12,10 +13,14 @@ export function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: st
   const [input, setInput] = useState("");
   const [output, setOutput] = useState(emptyOutput);
 
-  const gen = () => { 
-    const m = buildAesMaterial(256, mode === "AES-GCM" ? 12 : 16); 
-    setKeyHex(m.keyHex); 
-    setIvHex(m.ivHex); 
+  const task = useAsyncTask();
+  const invalidate = () => { task.invalidate(); setOutput(emptyOutput); };
+  const gen = () => {
+    setOutput(emptyOutput);
+    void task.run(async () => buildAesMaterial(256, mode === "AES-GCM" ? 12 : 16), material => {
+      setKeyHex(material.keyHex);
+      setIvHex(material.ivHex);
+    });
   };
 
   const isKeyValid = useMemo(() => {
@@ -36,22 +41,17 @@ export function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: st
     return isHex && isCorrectLen;
   }, [ivHex, mode]);
 
-  const run = async (a: "e"|"d") => { 
-    try { 
-      setOutput({ 
-        value: a === "e" 
-          ? await encryptAes({ mode, keyHex: keyHex.trim(), ivHex: ivHex.trim(), plainText: input, output: "hex" }) 
-          : await decryptAes({ mode, keyHex: keyHex.trim(), ivHex: ivHex.trim(), cipherText: input, input: "hex" }), 
-        error: "" 
-      }); 
-    } catch {
-      setOutput({ value: "", error: "加解密失败，请检查 Key/IV 长度及格式是否正确" });
-    }
+  const run = (action: "e" | "d") => {
+    setOutput(emptyOutput);
+    void task.run(() => action === "e"
+      ? encryptAes({ mode, keyHex, ivHex, plainText: input, output: "hex" })
+      : decryptAes({ mode, keyHex, ivHex, cipherText: input, input: "hex" }),
+    value => setOutput({ value, error: "" }));
   };
 
   return (
-    <CardFrame tool={tool} output={output} onCopy={() => onCopy(output.value)} controls={
-      <select value={mode} onChange={e => setMode(e.target.value as "AES-GCM" | "AES-CBC")}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
+    <CardFrame tool={tool} output={task.error ? { value: "", error: `加解密失败：${task.error}` } : output} onCopy={() => onCopy(output.value)} controls={
+      <select value={mode} aria-label="AES 模式" onChange={e => { invalidate(); setMode(e.target.value as "AES-GCM" | "AES-CBC"); setIvHex(""); }}><option value="AES-GCM">GCM</option><option value="AES-CBC">CBC</option></select>
     }>
       <div className="form-grid" style={{gap: "12px"}}>
         <div style={{display: "flex", flexDirection: "column"}}>
@@ -63,10 +63,10 @@ export function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: st
               </span>
             )}
           </div>
-          <input 
-            value={keyHex} 
-            onChange={e => setKeyHex(e.target.value)} 
-            placeholder="32位/48位/64位十六进制" 
+          <input
+            value={keyHex}
+            aria-label="AES Key" onChange={e => { invalidate(); setKeyHex(e.target.value); }}
+            placeholder="32位/48位/64位十六进制"
             className={isKeyValid === false ? "is-invalid" : isKeyValid === true ? "is-valid" : ""}
           />
         </div>
@@ -79,19 +79,19 @@ export function AesTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: st
               </span>
             )}
           </div>
-          <input 
-            value={ivHex} 
-            onChange={e => setIvHex(e.target.value)} 
-            placeholder={mode === "AES-GCM" ? "24位十六进制" : "32位十六进制"} 
+          <input
+            value={ivHex}
+            aria-label="AES IV" onChange={e => { invalidate(); setIvHex(e.target.value); }}
+            placeholder={mode === "AES-GCM" ? "24位十六进制" : "32位十六进制"}
             className={isIvValid === false ? "is-invalid" : isIvValid === true ? "is-valid" : ""}
           />
         </div>
       </div>
-      <button className="secondary-button" style={{alignSelf: "flex-start"}} onClick={gen}>随机生成 Key/IV (256-bit)</button>
-      <ControlledTextarea value={input} onChange={setInput} placeholder="输入要加密的明文，或解密的 Hex 密文..." />
+      <button className="secondary-button" style={{alignSelf: "flex-start"}} disabled={task.busy} onClick={gen}>随机生成 Key/IV (256-bit)</button>
+      <ControlledTextarea value={input} onChange={value => { invalidate(); setInput(value); }} placeholder="输入要加密的明文，或解密的 Hex 密文..." />
       <div className="button-row">
-        <button onClick={() => run("e")} disabled={!keyHex || !ivHex}>加密</button>
-        <button className="secondary-button" onClick={() => run("d")} disabled={!keyHex || !ivHex}>解密</button>
+        <button onClick={() => run("e")} disabled={task.busy || !isKeyValid || !isIvValid}>加密</button>
+        <button className="secondary-button" onClick={() => run("d")} disabled={task.busy || !isKeyValid || !isIvValid}>解密</button>
       </div>
     </CardFrame>
   );

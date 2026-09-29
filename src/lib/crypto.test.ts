@@ -39,3 +39,15 @@ describe("aes round-trip", () => {
     expect(back).toBe(plainText);
   });
 });
+
+describe("key and CSR generation", () => {
+  it.each(["RSA", "P-256", "P-384", "P-521"] as const)("generates a verifiable CSR for %s", async algorithm => {
+    const { generateRsaKeyPair, generateEccKeyPair, generateCsr } = await import("./crypto");
+    const keys = algorithm === "RSA" ? await generateRsaKeyPair(2048) : await generateEccKeyPair(algorithm);
+    const pem = await generateCsr(keys, { commonName: "example.com", organization: "Example, Inc", country: "CN" }, algorithm === "RSA" ? "RSA" : "ECC");
+    const { Pkcs10CertificateRequest } = await import("@peculiar/x509");
+    const csr = new Pkcs10CertificateRequest(pem);
+    expect(await csr.verify()).toBe(true);
+    expect(csr.subject).toContain("example.com");
+  });
+});
