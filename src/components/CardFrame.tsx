@@ -18,7 +18,7 @@ export function CardFrame({ tool, controls, output, onCopy, children }: {
             <strong>输出结果</strong>
             <button onClick={onCopy} disabled={!output.value}>复制</button>
           </div>
-          <textarea readOnly value={output.error || output.value} className={output.error ? "is-error" : ""} />
+          <textarea aria-label={`${tool.name} 输出结果`} aria-invalid={Boolean(output.error)} readOnly value={output.error || output.value} className={output.error ? "is-error" : ""} />
         </div>
       )}
     </article>

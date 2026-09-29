@@ -759,3 +759,9 @@ input.is-invalid {
   font-size: 15px;
   font-weight: 500;
 }
+
+/* Keep tool state in memory while category/search filters hide its card. */
+.tool-slot[hidden] { display: none; }
+.tool-slot { min-width: 0; }
+.tool-slot > .tool-card { height: 100%; }
+.jwt-claim-row { flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }

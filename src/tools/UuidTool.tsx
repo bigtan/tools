@@ -5,7 +5,7 @@ import { createUuidList } from "../lib/random";
 
 export function UuidTool({ tool, onCopy }: { tool: ToolDefinition; onCopy: (v: string) => void }) {
   const [count, setCount] = useState(5);
-  const [output, setOutput] = useState({ value: createUuidList(5), error: "" });
+  const [output, setOutput] = useState(() => ({ value: createUuidList(5), error: "" }));
   const generate = () => {
     try {
       setOutput({ value: createUuidList(count), error: "" });
